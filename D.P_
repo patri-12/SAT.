@@ -1,0 +1,327 @@
+#include <stdio.h>
+#include <stdlib.h>
+#include <time.h>
+
+
+// Verifică dacă o clauză este tautologie (conține un literal și opusul lui)
+int esteTautologie(int* clauza, int lungime) {
+    for (int i = 0; i < lungime; i++) {
+        for (int j = 0; j < lungime; j++) {
+            if (clauza[i] == -clauza[j]) return 1;
+        }
+    }
+    return 0;
+}
+
+// Verifică dacă o clauză a mai fost deja adăugată
+int existaDeja(int** C, int* literalCount, int K, int* nouaClauza, int lungime) {
+    for (int i = 0; i < K; i++) {
+        if (literalCount[i] != lungime) continue;
+        int gasit = 1;
+        for (int j = 0; j < lungime; j++) {
+            int found = 0;
+            for (int k = 0; k < lungime; k++) {
+                if (C[i][k] == nouaClauza[j]) {
+                    found = 1;
+                    break;
+                }
+            }
+            if (!found) {
+                gasit = 0;
+                break;
+            }
+        }
+        if (gasit) return 1;
+    }
+    return 0;
+}
+
+// Verifică dacă un literal nu e deja în clauză
+int nuEsteDeja(int* clauza, int lungime, int lit) {
+    for (int i = 0; i < lungime; i++) {
+        if (clauza[i] == lit) {
+            return 0;
+        }
+    }
+    return 1;
+}
+
+int verificaSatisfiabilitate(int** C, int* literalCount, int K) {
+    for (int i = 0; i < K; i++) {
+        if (literalCount[i] == 0) {
+            return 0;  // Dacă există o clauză goală, nu mai e satisfiabil
+        }
+    }
+    return 1;  // Dacă nu există clauze goale, setul este satisfiabil
+}
+
+void afisareClauze(int** C, int* literalCount, int K) {
+    for (int i = 0; i < K; i++) {
+        printf("Clauza %d: ", i + 1);
+        for (int j = 0; j < literalCount[i]; j++) {
+            printf("%d; ", C[i][j]);
+        }
+        printf("0\n");
+    }
+}
+
+int main() {
+    srand(time(NULL));
+
+    int K, maxVal;
+    printf("Cate clauze vrei sa generezi? ");
+    scanf("%d", &K);
+    printf("Introdu numarul maxim pentru literali(valoarea absolută, >=5)\n");
+    scanf("%d", &maxVal);
+
+  
+    // Inițializări pentru clauze și dimensiunile lor
+    int** C = (int**)malloc(K * sizeof(int*));
+    int* literalCount = (int*)malloc(K * sizeof(int));
+    int maxLiteralsPerClause = maxVal / 2 + 3;
+    int Nesatisfiabila = 0;
+
+
+
+
+     // Generare clauze inițiale aleatorii
+    for (int i = 0; i < K; i++) {
+        int n = rand() % maxLiteralsPerClause + 1;
+        C[i] = (int*)malloc(n * sizeof(int));
+        int j = 0;
+
+        while (j < n) {
+            int val = rand() % (2 * maxVal + 1) - maxVal;
+            if (val == 0) continue;
+            if (nuEsteDeja(C[i], j, val) && nuEsteDeja(C[i], j, -val)) 
+                C[i][j++] = val;
+        }
+        literalCount[i] = n;
+    }
+    
+    printf("\nClauze Initiale\n");
+    afisareClauze(C, literalCount, K);
+
+    // Aplicarea regulii clauzei unitare
+    int un_lit;
+    int count_lit_unici = 0;
+
+    for (int i = 0; i < K; i++) {
+        if (literalCount[i] == 1)
+            count_lit_unici++;
+    }
+
+    if (count_lit_unici == 0) {
+        printf("Nu se aplica regula clauzei cu un literal\n");
+    } else {
+        int count = 0;
+
+        while (count < count_lit_unici) {
+            int gasit = 0;
+
+            for (int i = 0; i < K && gasit == 0; i++) {
+                if (literalCount[i] == 1) {
+                    un_lit = C[i][0];
+                    printf("Clauza cu un singur literal este %d. Vom sterge aceasta clauza, si stergem complementul literalului %d din restul clauzelor, daca exista\n", i + 1, un_lit);
+
+                    free(C[i]);
+
+                    for (int j = i; j < K - 1; j++) {
+                        C[j] = C[j + 1];
+                        literalCount[j] = literalCount[j + 1];
+                    }
+
+                    K--;
+                    i--;
+                    gasit = 1;
+                }
+            }
+
+            if (!gasit) break;
+
+            for (int i = 0; i < K; i++) {
+                for (int j = 0; j < literalCount[i]; j++) {
+                    if (C[i][j] == -un_lit) {
+                        for (int k = j; k < literalCount[i] - 1; k++)
+                            C[i][k] = C[i][k + 1];
+                        literalCount[i]--;
+                        j--;
+                    }
+                }
+            }
+
+            printf("\n");
+            afisareClauze(C, literalCount, K);
+
+            if (!verificaSatisfiabilitate(C, literalCount, K)) {
+                printf("S-a generat clauza vida. Setul de clauze e NESATISFIABIL\n");
+                Nesatisfiabila = 1;
+                break;
+            }
+
+            count++;
+        }
+    }
+
+    // Regula literalului pur (DP): eliminăm complet clauzele care conțin literali puri
+if (K > 0 && Nesatisfiabila == 0) {
+    int lit_puri[100];
+    int count_lit_puri = 0;
+
+    for (int i = 0; i < K; i++) {
+        for (int j = 0; j < literalCount[i]; j++) {
+            int lit = C[i][j];
+            int ok = 1;
+
+            for (int p = 0; p < K && ok; p++) {
+                for (int q = 0; q < literalCount[p]; q++) {
+                    if (C[p][q] == -lit) {
+                        ok = 0;
+                        break;
+                    }
+                }
+            }
+
+            if (ok) {
+                int e_deja = 0;
+                for (int k = 0; k < count_lit_puri; k++) {
+                    if (lit == lit_puri[k]) {
+                        e_deja = 1;
+                        break;
+                    }
+                }
+
+                if (!e_deja) {
+                    lit_puri[count_lit_puri++] = lit;
+                }
+            }
+        }
+    }
+
+    if (count_lit_puri == 0) {
+        printf("Nu avem niciun literal pur\n");
+    } else {
+        printf("Literalii puri sunt: ");
+        for (int i = 0; i < count_lit_puri; i++)
+            printf("%d ", lit_puri[i]);
+        printf("\n");
+        printf("\nSe elimina clauzele care contin literali puri\n");
+
+        // Ștergem clauzele care conțin literal pur
+        for (int l = 0; l < count_lit_puri; l++) {
+            for (int i = 0; i < K; i++) {
+                int contine_pur = 0;
+                for (int j = 0; j < literalCount[i]; j++) {
+                    if (C[i][j] == lit_puri[l]) {
+                        contine_pur = 1;
+                        break;
+                    }
+                }
+
+                if (contine_pur) {
+                    free(C[i]);
+                    for (int m = i; m < K - 1; m++) {
+                        C[m] = C[m + 1];
+                        literalCount[m] = literalCount[m + 1];
+                    }
+                    K--;
+                    i--; // rămânem pe același index că s-a mutat clauza
+                }
+            }
+        }
+
+        afisareClauze(C, literalCount, K);
+
+        if (!verificaSatisfiabilitate(C, literalCount, K)) {
+            printf("Clauza vida obtinuta. Setul este NESATISFIABIL.\n");
+            Nesatisfiabila = 1;
+        }
+    }
+}
+
+
+    if (K == 0 && Nesatisfiabila == 0) {
+        printf("Toate clauzele au fost eliminate. Setul de clauze e SATISFIABIL\n");
+    }
+
+    // Rezolutie
+    if (K > 1 && Nesatisfiabila == 0) {
+        int satisfiabila = 0;
+        int maxRezolutii = 100;
+        int rezolutiiFacute = 0;
+
+        // Pentru fiecare pereche de clauze
+        for (int p = 0; p < K; p++) {
+            for (int q = p + 1; q < K; q++) {
+                for (int i = 0; i < literalCount[p]; i++) {
+                    for (int j = 0; j < literalCount[q]; j++) {
+                        if (C[p][i] == -C[q][j]) {
+                            // Dacă există literali opuși, aplicăm rezoluția
+                            if (++rezolutiiFacute > maxRezolutii) {
+                                break;
+                            }
+                            
+                            // Construim noua clauză
+                            int* nouaClauza = (int*)malloc((literalCount[p] + literalCount[q]) * sizeof(int));
+                            int idx = 0;
+
+                            for (int x = 0; x < literalCount[p]; x++) {
+                                if (x != i && nuEsteDeja(nouaClauza, idx, C[p][x]))
+                                    nouaClauza[idx++] = C[p][x];
+                            }
+                            for (int y = 0; y < literalCount[q]; y++) {
+                                if (y != j && nuEsteDeja(nouaClauza, idx, C[q][y]))
+                                    nouaClauza[idx++] = C[q][y];
+                            }
+
+                            if (esteTautologie(nouaClauza, idx)) {
+                                free(nouaClauza);
+                                continue;
+                            }
+
+                            if (existaDeja(C, literalCount, K, nouaClauza, idx)) {
+                                free(nouaClauza);
+                                continue;
+                            }
+
+                            C = realloc(C, (K + 1) * sizeof(int*));
+                            literalCount = realloc(literalCount, (K + 1) * sizeof(int));
+                            C[K] = nouaClauza;
+                            literalCount[K] = idx;
+
+                            printf("Rezolutie: Adunăm clauza %d și clauza %d\n", p + 1, q + 1);
+                            
+                            
+                            afisareClauze(C, literalCount, K + 1);
+
+                            if (idx == 0) {
+                                printf("\nClauza vida obtinuta. Setul este NESATISFIABIL.\n");
+                                satisfiabila = 1;
+                                Nesatisfiabila = 1;
+                                break;
+                            }
+                            K++;
+                        }
+                    }
+                    if (satisfiabila) break;
+                }
+                if (satisfiabila) break;
+            }
+            if (satisfiabila) break;
+        }
+
+        if (!satisfiabila) {
+            printf("\nToate rezolutiile posibile s-au epuizat. Setul este SATISFIABIL.\n");
+        }
+    }
+     
+     if(K==1) printf("A ramas o singura clauza. Setul e SATISFIABIL");
+
+    for (int i = 0; i < K; i++) {
+        free(C[i]);
+    }
+    free(C);
+    free(literalCount);
+
+    return 0;
+}

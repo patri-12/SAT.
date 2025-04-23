@@ -1,0 +1,299 @@
+#include <stdio.h>
+#include <stdlib.h>
+#include <time.h>
+
+#define MAX_LIT 100
+
+int nuEsteDeja(int* clauza, int lungime, int lit) {
+    for (int i = 0; i < lungime; i++) {
+        if (clauza[i] == lit || clauza[i] == -lit) {
+            return 0;
+        }
+    }
+    return 1;
+}
+
+int verificaSatisfiabilitate(int** C, int* literalCount, int K) {
+    if (K == 0) return 1;  // Formula este satisfiabilă dacă nu mai există clauze
+
+    for (int i = 0; i < K; i++) {
+        if (literalCount[i] == 0) {
+            return 0; // Clauza vida
+        }
+    }
+    return 1; // Formula este SATISFIABILA
+}
+
+void afisareClauze(int** C, int* literalCount, int K) {
+    for (int i = 0; i < K; i++) {
+        printf("Clauza %d: ", i + 1);
+        for (int j = 0; j < literalCount[i]; j++) {
+            printf("%d ", C[i][j]);
+        }
+        printf("0\n");
+    }
+}
+
+void eliminaClauza(int*** C_ref, int** literalCount_ref, int* K_ref, int index) {
+    int** C = *C_ref;
+    int* literalCount = *literalCount_ref;
+    free(C[index]);
+    for (int i = index; i < *K_ref - 1; i++) {
+        C[i] = C[i + 1];
+        literalCount[i] = literalCount[i + 1];
+    }
+    (*K_ref)--;
+}
+
+void adaugaClauza(int*** C_ref, int** literalCount_ref, int* K_ref, int* clauza, int lungime) {
+    int** C = *C_ref;
+    int* literalCount = *literalCount_ref;
+    int K = *K_ref;
+
+    // Realocam memoria pentru a adăuga o nouă clauză
+    C = realloc(C, (K + 1) * sizeof(int*));
+    literalCount = realloc(literalCount, (K + 1) * sizeof(int));
+
+    C[K] = malloc(lungime * sizeof(int));
+    for (int i = 0; i < lungime; i++) {
+        C[K][i] = clauza[i];
+    }
+    literalCount[K] = lungime;
+
+    *C_ref = C;
+    *literalCount_ref = literalCount;
+    *K_ref = K + 1;
+}
+
+void aplicaLiteralUnitar(int*** C_ref, int** literalCount_ref, int* K_ref) {
+    int** C = *C_ref;
+    int* literalCount = *literalCount_ref;
+    int K = *K_ref;
+
+    // Count unit literals
+    int count_lit_unici = 0;
+    for (int i = 0; i < K; i++) {
+        if (literalCount[i] == 1)
+            count_lit_unici++;
+    }
+
+    if (count_lit_unici == 0) {
+        printf("Nu exista literali unitari.\n");
+        return;
+    }
+
+    int count = 0;
+    while (count < count_lit_unici) {
+        int gasit = 0;
+        int un_lit;
+
+        for (int i = 0; i < K && gasit == 0; i++) {
+            if (literalCount[i] == 1) {
+                un_lit = C[i][0];
+                printf("Literal unitar gasit: %d\n", un_lit);
+                printf("Eliminam clauza %d si complementul lui %d din alte clauze\n", i+1, un_lit);
+
+                // Remove the clause containing the unit literal
+                eliminaClauza(C_ref, literalCount_ref, K_ref, i);
+                gasit = 1;
+
+                // Remove the complement of the unit literal from other clauses
+                for (int j = 0; j < *K_ref; j++) {
+                    for (int k = 0; k < (*literalCount_ref)[j]; k++) {
+                        if ((*C_ref)[j][k] == -un_lit) {
+                            // Remove the complement
+                            for (int l = k; l < (*literalCount_ref)[j] - 1; l++) {
+                                (*C_ref)[j][l] = (*C_ref)[j][l + 1];
+                            }
+                            (*literalCount_ref)[j]--;
+                            k--; // Check the same position again as we shifted elements
+                        }
+                    }
+                }
+            }
+        }
+
+        if (!gasit) break;
+
+        printf("Clauze dupa aplicarea regulii:\n");
+        afisareClauze(*C_ref, *literalCount_ref, *K_ref);
+
+        if (!verificaSatisfiabilitate(*C_ref, *literalCount_ref, *K_ref)) {
+            printf("S-a generat clauza vida. Setul de clauze e NESATISFIABIL\n");
+            exit(0);
+        }
+
+        count++;
+    }
+}
+
+void aplicaLiteralPur(int*** C_ref, int** literalCount_ref, int* K_ref) {
+    int** C = *C_ref;
+    int* literalCount = *literalCount_ref;
+    int K = *K_ref;
+    int frecventa[MAX_LIT * 2 + 1] = {0};
+
+    for (int i = 0; i < K; i++) {
+        for (int j = 0; j < literalCount[i]; j++) {
+            int lit = C[i][j];
+            frecventa[lit + MAX_LIT] = 1;
+        }
+    }
+
+    int litPuri[MAX_LIT];
+    int count = 0;
+    for (int i = -MAX_LIT; i <= MAX_LIT; i++) {
+        if (i == 0) continue;
+        if (frecventa[i + MAX_LIT] && !frecventa[-i + MAX_LIT]) {
+            litPuri[count++] = i;
+        }
+    }
+
+    if (count == 0) {
+        printf("Nu exista literali puri.\n");
+        return;
+    }
+
+    printf("Literalii puri sunt: ");
+    for (int i = 0; i < count; i++) printf("%d ", litPuri[i]);
+    printf("\nSe elimina clauzele care contin literali puri\n");
+
+    for (int i = 0; i < count; i++) {
+        for (int j = 0; j < *K_ref; j++) {
+            for (int k = 0; k < (*literalCount_ref)[j]; k++) {
+                if ((*C_ref)[j][k] == litPuri[i]) {
+                    eliminaClauza(C_ref, literalCount_ref, K_ref, j);
+                    j--;
+                    break;
+                }
+            }
+        }
+    }
+
+    afisareClauze(*C_ref, *literalCount_ref, *K_ref);
+}
+
+int nrSplituri = 0;              
+int literalSplitInitial = 0;
+
+void aplicaSplit(int*** C_ref, int** literalCount_ref, int* K_ref) {
+    int** C = *C_ref;
+    int* literalCount = *literalCount_ref;
+    int K = *K_ref;
+
+    if (K == 0) return;
+    if (nrSplituri >= 2) {
+        printf("Am atins limita maxima de 2 splituri. Formula este NESATISFIABILA\n");
+        exit(0);
+    }
+
+    int literalSplit;
+    if (nrSplituri == 0) {
+        literalSplit = C[0][0];
+        literalSplitInitial = literalSplit;
+    } else {
+        literalSplit = -literalSplitInitial;
+    }
+
+    nrSplituri++;
+    printf("\nFacem SPLIT pe literalul %d\n", literalSplit);
+
+    // === RAMURA CU literalSplit ===
+    printf("\n--- Ramura cu %d ---\n", literalSplit);
+
+    int** C1 = malloc((K + 1) * sizeof(int*));
+    int* lc1 = malloc((K + 1) * sizeof(int));
+    int K1 = 0;
+
+    for (int i = 0; i < K; i++) {
+        C1[K1] = malloc(literalCount[i] * sizeof(int));
+        for (int j = 0; j < literalCount[i]; j++) {
+            C1[K1][j] = C[i][j];
+        }
+        lc1[K1] = literalCount[i];
+        K1++;
+    }
+
+    // Adaugam clauza noua cu literalul de split
+    C1[K1] = malloc(sizeof(int));
+    C1[K1][0] = literalSplit;
+    lc1[K1] = 1;
+    K1++;
+
+    printf("Clauze dupa split (inclusiv noua clauza cu %d):\n", literalSplit);
+    afisareClauze(C1, lc1, K1);
+
+    aplicaLiteralUnitar(&C1, &lc1, &K1);
+    aplicaLiteralPur(&C1, &lc1, &K1);
+
+    if (!verificaSatisfiabilitate(C1, lc1, K1)) {
+        printf("Formula contine clauza vida. Ramura cu %d este NESATISFIABILA\n", literalSplit);
+    } else {
+        if (K1 == 0) {
+            printf("Toate clauzele au fost eliminate. Formula este SATISFIABILA\n");
+            exit(0);
+        }
+        aplicaSplit(&C1, &lc1, &K1);
+    }
+
+    
+    for (int i = 0; i < K1; i++) free(C1[i]);
+    free(C1);
+    free(lc1);
+
+    printf("Am incercat ambele ramuri. Formula este NESATISFIABILA\n");
+    exit(0);
+}
+
+
+
+int main() {
+    srand(time(NULL));
+    int K, maxVal;
+    printf("Cate clauze vrei sa generezi? ");
+    scanf("%d", &K);
+    printf("Introdu numarul maxim pentru literali (valoare absoluta, >=5): ");
+    scanf("%d", &maxVal);
+
+    int** C = malloc(K * sizeof(int*));
+    int* literalCount = malloc(K * sizeof(int));
+
+    for (int i = 0; i < K; i++) {
+        int n = rand() % (maxVal / 2 + 3) + 1;
+        C[i] = malloc(n * sizeof(int));
+        int j = 0;
+        while (j < n) {
+            int val = rand() % (2 * maxVal + 1) - maxVal;
+            if (val == 0) continue;
+            if (nuEsteDeja(C[i], j, val)) C[i][j++] = val;
+        }
+        literalCount[i] = n;
+    }
+
+    printf("\nClauze initiale:\n");
+    afisareClauze(C, literalCount, K);
+
+    
+    aplicaLiteralUnitar(&C, &literalCount, &K);
+
+    if (K == 0) {
+        printf("Toate clauzele au fost eliminate. Formula este SATISFIABILA\n");
+        return 0;
+    }
+
+    
+    aplicaLiteralPur(&C, &literalCount, &K);
+
+    if (K == 0) {
+        printf("Toate clauzele au fost eliminate. Formula este SATISFIABILA\n");
+        return 0;
+    }
+
+    
+    aplicaSplit(&C, &literalCount, &K);
+
+    for (int i = 0; i < K; i++) free(C[i]);
+    free(C);
+    free(literalCount);
+    return 0;
+}
