@@ -1,4 +1,4 @@
-#include <stdio.h>
+ #include <stdio.h>
 #include <stdlib.h>
 #include <time.h>
 
@@ -67,6 +67,7 @@ void afisareClauze(int** C, int* literalCount, int K) {
 
 int main() {
     srand(time(NULL));
+    clock_t start = clock();
 
     int K, maxVal;
     printf("Cate clauze vrei sa generezi? ");
@@ -323,5 +324,11 @@ if (K > 0 && Nesatisfiabila == 0) {
     free(C);
     free(literalCount);
 
+
+clock_t end = clock();
+double duration = (double)(end - start) / CLOCKS_PER_SEC;
+printf("Timp de executie: %.2f secunde\n", duration);
+      fflush(stdout);
+    
     return 0;
 }
